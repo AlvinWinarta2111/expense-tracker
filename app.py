@@ -1,9 +1,15 @@
+from pathlib import Path
+
 import streamlit as st
+from PIL import Image
 
 from theme import TEXT, TEXT_MUTED, inject_background, inject_css, render_page_header
 from views import add_expense, analytics, home
 
-st.set_page_config(page_title="Living Cost Tracker", page_icon="💰", layout="wide")
+ICON_PATH = Path(__file__).resolve().parent / "Images" / "app_icon.png"
+app_icon = Image.open(ICON_PATH) if ICON_PATH.exists() else "💰"
+
+st.set_page_config(page_title="EMS", page_icon=app_icon, layout="wide")
 
 if "authed" not in st.session_state:
     st.session_state.authed = False
