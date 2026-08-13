@@ -60,3 +60,23 @@ def get_current_balance() -> float:
     if df.empty:
         return 0.0
     return float(df["amount"].sum())
+
+
+def delete_entries(ids: list):
+    if not ids:
+        return
+    sb = get_client()
+    sb.table("entries").delete().in_("id", ids).execute()
+
+
+def update_entry(entry_id: int, item: str, entry_date, category_id: int, amount: float, note: str = ""):
+    sb = get_client()
+    sb.table("entries").update(
+        {
+            "item": item,
+            "entry_date": str(entry_date),
+            "category_id": category_id,
+            "amount": amount,
+            "note": note,
+        }
+    ).eq("id", entry_id).execute()

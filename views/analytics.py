@@ -2,9 +2,45 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from db import get_entries
-from theme import BORDER, CATEGORY_COLORS, NEGATIVE, SURFACE, TEXT, TEXT_MUTED
+from db import delete_entries, get_categories, get_entries, update_entry
+from theme import BORDER, CATEGORY_COLORS, NEGATIVE, POSITIVE, SURFACE, TEXT, TEXT_MUTED
 from utils import format_rupiah
+
+
+@st.dialog("Delete entries?")
+def _confirm_delete_dialog(ids, labels):
+    st.write(f"You're about to delete {len(ids)} entr{'y' if len(ids) == 1 else 'ies'}:")
+    for label in labels:
+        st.write(f"- {label}")
+    c1, c2 = st.columns(2)
+    if c1.button("Cancel", use_container_width=True):
+        st.rerun()
+    if c2.button("Delete", use_container_width=True, type="primary"):
+        delete_entries(ids)
+        st.rerun()
+
+
+@st.dialog("Edit entry")
+def _edit_dialog(row, categories_df):
+    new_item = st.text_input("Item", value=row["item"])
+    new_date = st.date_input("Date", value=row["entry_date"].date())
+
+    cat_names = categories_df["name"].tolist()
+    current_cat_name = categories_df.loc[categories_df["id"] == row["category_id"], "name"].iloc[0]
+    new_cat_name = st.selectbox("Category", cat_names, index=cat_names.index(current_cat_name))
+
+    is_income_now = row["amount"] > 0
+    direction = st.radio("Type", ["Expense", "Income"], index=1 if is_income_now else 0, horizontal=True)
+    new_raw_amount = st.number_input(
+        "Amount (Rp)", min_value=0, step=1000, value=int(abs(row["amount"]))
+    )
+    new_note = st.text_input("Note", value=row.get("note") or "")
+
+    if st.button("Save changes", use_container_width=True):
+        new_cat_id = int(categories_df.loc[categories_df["name"] == new_cat_name, "id"].iloc[0])
+        signed = new_raw_amount if direction == "Income" else -new_raw_amount
+        update_entry(int(row["id"]), new_item, new_date, new_cat_id, signed, new_note)
+        st.rerun()
 
 
 def render():
@@ -144,9 +180,36 @@ def render():
     elif type_filter == "Expense":
         filtered = filtered[~filtered["is_income"]]
 
+    filtered = filtered.reset_index(drop=True)
+
     display_df = filtered[["entry_date", "item", "category_name", "amount", "running_balance"]].copy()
     display_df["entry_date"] = display_df["entry_date"].dt.strftime("%Y-%m-%d")
     display_df["amount"] = display_df["amount"].apply(format_rupiah)
     display_df["running_balance"] = display_df["running_balance"].apply(format_rupiah)
     display_df.columns = ["Date", "Item", "Category", "Amount", "Running Balance"]
-    st.dataframe(display_df, use_container_width=True)
+
+    event = st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="multi-row",
+        key="entries_table",
+    )
+    selected_rows = event.selection.rows if event and event.selection else []
+
+    action_l, action_r, _spacer = st.columns([1, 1, 4])
+    with action_l:
+        if st.button(
+            "Edit selected", disabled=len(selected_rows) != 1, use_container_width=True
+        ):
+            categories_df = get_categories()
+            _edit_dialog(filtered.iloc[selected_rows[0]], categories_df)
+    with action_r:
+        if st.button(
+            f"Delete selected ({len(selected_rows)})",
+            disabled=not selected_rows,
+            use_container_width=True,
+        ):
+            picked = filtered.iloc[selected_rows]
+            _confirm_delete_dialog(picked["id"].tolist(), picked["item"].tolist())
