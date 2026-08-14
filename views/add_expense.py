@@ -22,8 +22,8 @@ def _saved_dialog(item, signed_amount, category_name, entry_date):
         st.rerun()
 
 
-def render():
-    st.metric("Current balance", format_rupiah(get_current_balance()))
+def render(current_user: str):
+    st.metric("Current balance", format_rupiah(get_current_balance(current_user)))
 
     categories = get_categories()
 
@@ -51,5 +51,5 @@ def render():
                 st.error("Fill in item and amount.")
             else:
                 signed = raw_amount if direction == "Income" else -raw_amount
-                add_entry(item, entry_date, cat_row.id, signed, note)
+                add_entry(item, entry_date, cat_row.id, signed, current_user, note)
                 _saved_dialog(item, signed, cat_row.name, entry_date)

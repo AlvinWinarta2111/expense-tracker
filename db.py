@@ -19,7 +19,7 @@ def get_categories(include_archived: bool = False) -> pd.DataFrame:
     return pd.DataFrame(res.data)
 
 
-def add_entry(item: str, entry_date, category_id: int, amount: float, note: str = ""):
+def add_entry(item: str, entry_date, category_id: int, amount: float, user_id: str, note: str = ""):
     sb = get_client()
     sb.table("entries").insert(
         {
@@ -28,15 +28,17 @@ def add_entry(item: str, entry_date, category_id: int, amount: float, note: str 
             "category_id": category_id,
             "amount": amount,
             "note": note,
+            "user_id": user_id,
         }
     ).execute()
 
 
-def get_entries(start=None, end=None) -> pd.DataFrame:
+def get_entries(user_id: str, start=None, end=None) -> pd.DataFrame:
     sb = get_client()
     q = (
         sb.table("entries")
         .select("*, categories(name,is_income,color)")
+        .eq("user_id", user_id)
         .order("entry_date")
         .order("id")
     )
@@ -55,21 +57,21 @@ def get_entries(start=None, end=None) -> pd.DataFrame:
     return df
 
 
-def get_current_balance() -> float:
-    df = get_entries()
+def get_current_balance(user_id: str) -> float:
+    df = get_entries(user_id)
     if df.empty:
         return 0.0
     return float(df["amount"].sum())
 
 
-def delete_entries(ids: list):
+def delete_entries(ids: list, user_id: str):
     if not ids:
         return
     sb = get_client()
-    sb.table("entries").delete().in_("id", ids).execute()
+    sb.table("entries").delete().eq("user_id", user_id).in_("id", ids).execute()
 
 
-def update_entry(entry_id: int, item: str, entry_date, category_id: int, amount: float, note: str = ""):
+def update_entry(entry_id: int, item: str, entry_date, category_id: int, amount: float, user_id: str, note: str = ""):
     sb = get_client()
     sb.table("entries").update(
         {
@@ -79,4 +81,4 @@ def update_entry(entry_id: int, item: str, entry_date, category_id: int, amount:
             "amount": amount,
             "note": note,
         }
-    ).eq("id", entry_id).execute()
+    ).eq("id", entry_id).eq("user_id", user_id).execute()

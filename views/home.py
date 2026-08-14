@@ -5,8 +5,8 @@ from db import get_entries
 from utils import format_rupiah
 
 
-def render():
-    df = get_entries()
+def render(current_user: str):
+    df = get_entries(current_user)
     if df.empty:
         st.info("No entries yet. Head to Add Expense to log your first one.")
         return
@@ -69,3 +69,4 @@ def render():
         st.caption(f"Biggest category this month: {top_cat} \u00b7 {format_rupiah(by_cat.max())}")
 
     st.write("")
+    st.write("Use the tabs above to add an entry or view analytics.")

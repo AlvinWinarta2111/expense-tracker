@@ -8,7 +8,7 @@ from utils import format_rupiah
 
 
 @st.dialog("Delete entries?")
-def _confirm_delete_dialog(ids, labels):
+def _confirm_delete_dialog(ids, labels, current_user):
     st.write(f"You're about to delete {len(ids)} entr{'y' if len(ids) == 1 else 'ies'}:")
     for label in labels:
         st.write(f"- {label}")
@@ -16,12 +16,12 @@ def _confirm_delete_dialog(ids, labels):
     if c1.button("Cancel", use_container_width=True):
         st.rerun()
     if c2.button("Delete", use_container_width=True, type="primary"):
-        delete_entries(ids)
+        delete_entries(ids, current_user)
         st.rerun()
 
 
 @st.dialog("Edit entry")
-def _edit_dialog(row, categories_df):
+def _edit_dialog(row, categories_df, current_user):
     new_item = st.text_input("Item", value=row["item"])
     new_date = st.date_input("Date", value=row["entry_date"].date())
 
@@ -39,12 +39,12 @@ def _edit_dialog(row, categories_df):
     if st.button("Save changes", use_container_width=True):
         new_cat_id = int(categories_df.loc[categories_df["name"] == new_cat_name, "id"].iloc[0])
         signed = new_raw_amount if direction == "Income" else -new_raw_amount
-        update_entry(int(row["id"]), new_item, new_date, new_cat_id, signed, new_note)
+        update_entry(int(row["id"]), new_item, new_date, new_cat_id, signed, current_user, new_note)
         st.rerun()
 
 
-def render():
-    df = get_entries()
+def render(current_user: str):
+    df = get_entries(current_user)
     if df.empty:
         st.info("No entries yet. Add some from the Add Expense tab.")
         return
@@ -204,7 +204,7 @@ def render():
             "Edit selected", disabled=len(selected_rows) != 1, use_container_width=True
         ):
             categories_df = get_categories()
-            _edit_dialog(filtered.iloc[selected_rows[0]], categories_df)
+            _edit_dialog(filtered.iloc[selected_rows[0]], categories_df, current_user)
     with action_r:
         if st.button(
             f"Delete selected ({len(selected_rows)})",
@@ -212,4 +212,4 @@ def render():
             use_container_width=True,
         ):
             picked = filtered.iloc[selected_rows]
-            _confirm_delete_dialog(picked["id"].tolist(), picked["item"].tolist())
+            _confirm_delete_dialog(picked["id"].tolist(), picked["item"].tolist(), current_user)
