@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 
 from db import get_entries
-from utils import format_rupiah
+from utils import format_currency
 
 
 def render(current_user: str):
@@ -17,7 +17,7 @@ def render(current_user: str):
     balance = df["amount"].sum()
     st.markdown(
         f"<p class='balance-label'>Current balance</p>"
-        f"<p class='balance-value'>{format_rupiah(balance)}</p>",
+        f"<p class='balance-value'>{format_currency(balance, current_user)}</p>",
         unsafe_allow_html=True,
     )
 
@@ -46,18 +46,18 @@ def render(current_user: str):
     c1, c2, c3 = st.columns(3)
     c1.metric(
         "Income this month",
-        format_rupiah(income),
+        format_currency(income, current_user),
         delta=f"{d_income:+.0f}% vs last month" if d_income is not None else None,
     )
     c2.metric(
         "Spent this month",
-        format_rupiah(spent),
+        format_currency(spent, current_user),
         delta=f"{d_spent:+.0f}% vs last month" if d_spent is not None else None,
         delta_color="inverse",
     )
     c3.metric(
         "Saved this month",
-        format_rupiah(saved),
+        format_currency(saved, current_user),
         delta=f"{d_saved:+.0f}% vs last month" if d_saved is not None else None,
     )
 
@@ -66,7 +66,9 @@ def render(current_user: str):
     if not expenses.empty:
         by_cat = expenses.groupby("category_name")["amount"].sum().abs()
         top_cat = by_cat.idxmax()
-        st.caption(f"Biggest category this month: {top_cat} \u00b7 {format_rupiah(by_cat.max())}")
+        st.caption(
+            f"Biggest category this month: {top_cat} \u00b7 {format_currency(by_cat.max(), current_user)}"
+        )
 
     st.write("")
     st.write("Use the tabs above to add an entry or view analytics.")

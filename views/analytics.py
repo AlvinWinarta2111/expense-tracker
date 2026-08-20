@@ -3,8 +3,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from db import delete_entries, get_categories, get_entries, update_entry
-from theme import BORDER, CATEGORY_COLORS, NEGATIVE, POSITIVE, SURFACE, TEXT, TEXT_MUTED
-from utils import format_rupiah
+from theme import BORDER, CATEGORY_COLORS, NEGATIVE, SURFACE, TEXT, TEXT_MUTED
+from utils import format_currency
 
 
 @st.dialog("Delete entries?")
@@ -31,19 +31,33 @@ def _edit_dialog(row, categories_df, current_user):
 
     is_income_now = row["amount"] > 0
     direction = st.radio("Type", ["Expense", "Income"], index=1 if is_income_now else 0, horizontal=True)
+
+    new_payment_method = None
+    if current_user == "jpy":
+        pm_options = ["Card", "Cash"]
+        current_pm = row.get("payment_method") if row.get("payment_method") in pm_options else "Cash"
+        new_payment_method = st.radio(
+            "Payment Method", pm_options, index=pm_options.index(current_pm), horizontal=True
+        )
+
+    currency_symbol = "\u00a5" if current_user == "jpy" else "Rp"
     new_raw_amount = st.number_input(
-        "Amount (Rp)", min_value=0, step=1000, value=int(abs(row["amount"]))
+        f"Amount ({currency_symbol})", min_value=0, step=1000, value=int(abs(row["amount"]))
     )
     new_note = st.text_input("Note", value=row.get("note") or "")
 
     if st.button("Save changes", use_container_width=True):
         new_cat_id = int(categories_df.loc[categories_df["name"] == new_cat_name, "id"].iloc[0])
         signed = new_raw_amount if direction == "Income" else -new_raw_amount
-        update_entry(int(row["id"]), new_item, new_date, new_cat_id, signed, current_user, new_note)
+        update_entry(
+            int(row["id"]), new_item, new_date, new_cat_id, signed, current_user, new_note, new_payment_method
+        )
         st.rerun()
 
 
 def render(current_user: str):
+    is_jpy = current_user == "jpy"
+
     df = get_entries(current_user)
     if df.empty:
         st.info("No entries yet. Add some from the Add Expense tab.")
@@ -66,9 +80,11 @@ def render(current_user: str):
     saved = income - total_spent
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Income", format_rupiah(income))
-    c2.metric("Spent", format_rupiah(total_spent))
-    c3.metric("Saved", format_rupiah(saved))
+    c1.metric("Income", format_currency(income, current_user))
+    c2.metric("Spent", format_currency(total_spent, current_user))
+    c3.metric("Saved", format_currency(saved, current_user))
+
+    separators = ".," if is_jpy else ",."
 
     if not expenses.empty:
         by_cat = expenses.groupby("category_name")["amount"].sum().abs().sort_values(ascending=True)
@@ -83,7 +99,7 @@ def render(current_user: str):
                 marker_color=colors,
                 customdata=pct.values,
                 hovertemplate="<b>%{y}</b><br>" + "%{text}<br>%{customdata}% of spending<extra></extra>",
-                text=[format_rupiah(v) for v in by_cat.values],
+                text=[format_currency(v, current_user) for v in by_cat.values],
                 textposition="outside",
                 textfont=dict(color=TEXT, size=12),
             )
@@ -98,7 +114,7 @@ def render(current_user: str):
             height=320,
             hoverlabel=dict(bgcolor=TEXT, font_color="#0D0E10"),
             showlegend=False,
-            separators=",.",
+            separators=separators,
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -125,7 +141,7 @@ def render(current_user: str):
             name="Income",
             mode="lines+markers",
             line=dict(color=CATEGORY_COLORS["Income"], width=2),
-            text=[format_rupiah(v) for v in trend["income"]],
+            text=[format_currency(v, current_user) for v in trend["income"]],
             hovertemplate="%{text}<extra>Income</extra>",
         )
     )
@@ -136,7 +152,7 @@ def render(current_user: str):
             name="Spent",
             mode="lines+markers",
             line=dict(color=NEGATIVE, width=2),
-            text=[format_rupiah(v) for v in trend["spent"]],
+            text=[format_currency(v, current_user) for v in trend["spent"]],
             hovertemplate="%{text}<extra>Spent</extra>",
         )
     )
@@ -149,13 +165,18 @@ def render(current_user: str):
         yaxis=dict(showgrid=True, gridcolor=BORDER, title=None),
         legend=dict(orientation="h", y=1.15, font=dict(color=TEXT_MUTED)),
         hoverlabel=dict(bgcolor=TEXT, font_color="#0D0E10"),
-        separators=",.",
+        separators=separators,
     )
     st.plotly_chart(fig2, use_container_width=True)
 
     st.subheader("All entries this month")
 
-    search_col, cat_col, type_col = st.columns(3)
+    if is_jpy:
+        search_col, cat_col, pm_col, type_col = st.columns(4)
+    else:
+        search_col, cat_col, type_col = st.columns(3)
+        pm_col = None
+
     with search_col:
         search_term = st.text_input(
             "Search", placeholder="Search by item...", label_visibility="collapsed"
@@ -165,6 +186,12 @@ def render(current_user: str):
         selected_cats = st.multiselect(
             "Category", cat_options, placeholder="All categories", label_visibility="collapsed"
         )
+    pm_filter = "All"
+    if is_jpy:
+        with pm_col:
+            pm_filter = st.selectbox(
+                "Payment Method", ["All", "Card", "Cash"], label_visibility="collapsed"
+            )
     with type_col:
         type_filter = st.selectbox(
             "Type", ["All", "Income", "Expense"], label_visibility="collapsed"
@@ -175,6 +202,8 @@ def render(current_user: str):
         filtered = filtered[filtered["item"].str.contains(search_term, case=False, na=False)]
     if selected_cats:
         filtered = filtered[filtered["category_name"].isin(selected_cats)]
+    if is_jpy and pm_filter != "All":
+        filtered = filtered[filtered["payment_method"] == pm_filter]
     if type_filter == "Income":
         filtered = filtered[filtered["is_income"]]
     elif type_filter == "Expense":
@@ -182,11 +211,21 @@ def render(current_user: str):
 
     filtered = filtered.reset_index(drop=True)
 
-    display_df = filtered[["entry_date", "item", "category_name", "amount", "running_balance"]].copy()
+    cols = ["entry_date", "item", "category_name"]
+    names = ["Date", "Item", "Category"]
+    if is_jpy:
+        cols.append("payment_method")
+        names.append("Payment Method")
+    cols += ["amount", "running_balance"]
+    names += ["Amount", "Running Balance"]
+
+    display_df = filtered[cols].copy()
     display_df["entry_date"] = display_df["entry_date"].dt.strftime("%Y-%m-%d")
-    display_df["amount"] = display_df["amount"].apply(format_rupiah)
-    display_df["running_balance"] = display_df["running_balance"].apply(format_rupiah)
-    display_df.columns = ["Date", "Item", "Category", "Amount", "Running Balance"]
+    display_df["amount"] = display_df["amount"].apply(lambda v: format_currency(v, current_user))
+    display_df["running_balance"] = display_df["running_balance"].apply(
+        lambda v: format_currency(v, current_user)
+    )
+    display_df.columns = names
 
     event = st.dataframe(
         display_df,

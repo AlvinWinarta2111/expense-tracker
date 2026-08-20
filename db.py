@@ -19,7 +19,15 @@ def get_categories(include_archived: bool = False) -> pd.DataFrame:
     return pd.DataFrame(res.data)
 
 
-def add_entry(item: str, entry_date, category_id: int, amount: float, user_id: str, note: str = ""):
+def add_entry(
+    item: str,
+    entry_date,
+    category_id: int,
+    amount: float,
+    user_id: str,
+    note: str = "",
+    payment_method: str = None,
+):
     sb = get_client()
     sb.table("entries").insert(
         {
@@ -29,6 +37,7 @@ def add_entry(item: str, entry_date, category_id: int, amount: float, user_id: s
             "amount": amount,
             "note": note,
             "user_id": user_id,
+            "payment_method": payment_method,
         }
     ).execute()
 
@@ -71,7 +80,16 @@ def delete_entries(ids: list, user_id: str):
     sb.table("entries").delete().eq("user_id", user_id).in_("id", ids).execute()
 
 
-def update_entry(entry_id: int, item: str, entry_date, category_id: int, amount: float, user_id: str, note: str = ""):
+def update_entry(
+    entry_id: int,
+    item: str,
+    entry_date,
+    category_id: int,
+    amount: float,
+    user_id: str,
+    note: str = "",
+    payment_method: str = None,
+):
     sb = get_client()
     sb.table("entries").update(
         {
@@ -80,5 +98,6 @@ def update_entry(entry_id: int, item: str, entry_date, category_id: int, amount:
             "category_id": category_id,
             "amount": amount,
             "note": note,
+            "payment_method": payment_method,
         }
     ).eq("id", entry_id).eq("user_id", user_id).execute()
